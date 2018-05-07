@@ -1,24 +1,22 @@
+{-# LANGUAGE OverloadedStrings #-}
 module ParserSpec where 
 import Test.Hspec
-import Sql.Parser
-import Sql.Syntax
-import Sql.Lexer (Parser)
+import Parse
+import Parse.Csv
+import Sql.Syntax (TableRef(..), Prim(..))
+import Types
 
-import Text.Parsec (parse, eof)
+import qualified System.IO.Streams.List as SL
+import qualified Data.Vector as V
 
-run :: Parser a -> String -> a
-run p s = case parse (p <* eof) ""  s of
-    Left e -> error $ show e
-    Right v -> v
-
+testCSV = "foo,bar,baz\npeter,1,2\nwas,3,4\nhere,5,6"
 
 spec :: Spec
 spec = do
-  describe "parsers" $ do
-    it "parsers a basic select str" $ do
-        run  parseQueryExpr "select '1'" `shouldBe` (basicSelectStr "1")
-    it "parsers a basic select int" $ do
-        run  parseQueryExpr "select 1" `shouldBe` (basicSelectInt 1)
-    it "parses a simple path query" $ do
-        let s = Select SQDefault [(Simple $ Star, Nothing)] [TablePath "foo.csv"] Nothing [] Nothing [] 
-        run parseQueryExpr "select * from foo.csv" `shouldBe` s
+  describe "CSV parsers" $ do
+    it "parses a csv" $ do
+      st <- readData (TableString testCSV)
+      (mh, body) <- parseCsv True st
+      rows <-  SL.toList body
+      rows `shouldBe` fmap V.fromList [["peter","1","2"],["was","3","4"],["here","5","6"]]
+      mh  `shouldBe` (Just $ V.fromList ["foo", "bar", "baz"])

@@ -26,7 +26,19 @@ library:
   source-dirs: src
   dependencies:
   - parsec
-
+  - cassava
+  - vector
+  - bytestring
+  - attoparsec
+  - io-streams
+  - containers
+  - mtl
+  - hashmap
+  - hashable 
+  - transformers
+  - lens
+  - optparse-generic
+  - optparse-applicative
 executables:
   qq-exe:
     main:                Main.hs
@@ -37,6 +49,14 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - qq
+    - optparse-generic
+    - optparse-applicative
+    - io-streams
+    - containers
+    - vector
+    - transformers
+    - parsec
+    - mtl
 
 tests:
   qq-test:
@@ -50,3 +70,10 @@ tests:
     - qq
     - hspec
     - parsec
+    - attoparsec
+    - io-streams
+    - bytestring
+    - vector
+    - containers
+    - mtl
+    - transformers

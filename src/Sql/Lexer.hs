@@ -9,8 +9,9 @@ type Parser = Parsec String ()
 
 
 lexer = Tok.makeTokenParser $ emptyDef { 
-      Tok.reservedNames = ["select", "from", "group", "by", "where", "having", "order", "in"]
-    , Tok.reservedOpNames = ["(", ")", "+", "-", "/", "*" , ",", ";"]
+      Tok.reservedNames = ["select", "from", "group", "by", "where", "having", "order", "in", "limit", "string", "int", "float", "bool", "type"]
+    , Tok.reservedOpNames = ["(", ")", "+", "-", "/", "*" , ",", ";", "."]
+    , Tok.caseSensitive = False
   }
 
 
@@ -50,8 +51,11 @@ stringLiteral = Tok.stringLiteral lexer
 whiteSpace :: Parser ()
 whiteSpace = Tok.whiteSpace lexer
 
-number :: Parser (Either Integer Double)
-number = Tok.naturalOrFloat lexer
+integer :: Parser Integer
+integer = Tok.integer lexer
+
+float :: Parser Double
+float = Tok.float lexer
 
 reserved :: String -> Parser ()
 reserved = Tok.reserved lexer
