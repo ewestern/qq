@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
 module Sql.Syntax where
 
 import qualified Data.ByteString as BS
@@ -8,8 +9,10 @@ import qualified Data.ByteString as BS
 import Control.Lens hiding (Context)
 import GHC.Generics (Generic)
 import Data.Hashable
+import qualified Data.ByteString.Char8 as BC
 
 import Data.Data
+import Data.Csv (ToField(..))
 import Data.Typeable
 import Control.Monad.Except
 
@@ -18,6 +21,16 @@ data Prim
   | FloatPrim Double
   | StringPrim String
   | BoolPrim Bool deriving (Eq, Show, Ord, Generic)
+
+instance ToField Prim where
+  toField = \case 
+    IntPrim i -> BC.pack $ show i
+    FloatPrim f -> BC.pack $ show f
+    StringPrim s -> BC.pack s
+    BoolPrim b -> BC.pack $ show b
+    
+    
+    
 
 instance Hashable Prim
 

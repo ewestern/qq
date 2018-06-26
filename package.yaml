@@ -39,6 +39,7 @@ library:
   - lens
   - optparse-generic
   - optparse-applicative
+  - async
 executables:
   qq-exe:
     main:                Main.hs
@@ -57,6 +58,8 @@ executables:
     - transformers
     - parsec
     - mtl
+    - cassava
+    - bytestring
 
 tests:
   qq-test:

@@ -28,14 +28,14 @@ doParse s = case parse (parseQueryExpr <* eof) ""  s of
 
 testCSV = "foo,bar,baz\npeter,1,2\nwas,3,4\nhere,5,6\nalabama,7,8\narkansas,9,10"
 
-options = Options Nothing True Csv
+options = Options Nothing True Csv 1
 
 query' :: String -> IO (InputStream Row)
 query'  command = do
   let ctx = Context M.empty M.empty Nothing $ SelectHeaderMap M.empty
       queryExpr = doParse command
   init <- getInitial options queryExpr
-  eitherStream <- runExceptT $ flip evalStateT ctx $ plan init queryExpr >>= execute
+  eitherStream <- runExceptT $ flip evalStateT ctx $ plan 1 init queryExpr >>= execute
   case eitherStream of
     Right input -> return $ input
     Left s -> error "ASD"

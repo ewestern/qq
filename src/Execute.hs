@@ -21,9 +21,16 @@ import Data.Data
 import Data.Typeable
 import Data.Hashable
 
+import Control.Concurrent
+import Control.Concurrent.Chan
+import Control.Concurrent.MVar
+import Control.Concurrent.Async (Async, async, wait)
+
+
 
 import Control.Lens( (^.), (%~), view, set, use, uses)
 import Control.Monad.Trans.Except (ExceptT(..), except)
+import Control.Applicative ((<$>))
 
 import Data.Either
 import Data.Maybe (fromMaybe, fromJust,catMaybes)
@@ -43,6 +50,7 @@ import Control.Monad
 import Control.Monad.Trans.State.Lazy
 
 import System.IO.Streams (InputStream, OutputStream, makeOutputStream, peek)
+import System.IO.Streams.Concurrent (inputToChan)
 import qualified System.IO.Streams.Combinators as SC
 import qualified System.IO.Streams.List as SL
 
@@ -150,6 +158,7 @@ execute' (SeqScan selectList cond tr inputStream)  = do
   let rawHeaders = M.foldlWithKey (\acc k rc -> M.insert (getTableAlias k) (rc ^. rawHeader) acc) M.empty rcs
       selectHeaders = updateHeaderMap rawHeaders $ fmap term valueExpressions
   modify (set selectHeaderMap selectHeaders )
+  --modify (set selectHeader $ Just $ fmap () 
   -- TODO!
   return evaluatedStream
 
@@ -159,12 +168,26 @@ execute' (Sort node ss) = do
   ls <- execute' node >>= (liftIO . SL.toList)
   selectMap <- uses selectHeaderMap unSelectHeaderMap
   let svs = throwEither $ mapM (evalSortSpec selectMap) ss
-  -- TODO
   liftIO $ SL.fromList $ sortBy (getSortingFunction svs) ls
   where
     evalSortSpec hm (SortSpec val dir) = do
       sv <- evaluateTerm hm $ term val
       return (sv, dir)
+
+execute' (ParallelAggregate parallelism node selectList groupingKeys@(k:ks) cond) = do
+  evaluated <- execute' node
+  selectMap <- uses selectHeaderMap unSelectHeaderMap
+  selectVals <- liftEither $ mapM (evaluateTerm selectMap) $ fmap (term . fst) selectList
+  groupVals <- liftEither $ mapM (evaluateTerm selectMap) $ fmap term groupingKeys
+  aggregator <- liftEither $ getAggregator selectMap selectVals groupVals
+  chans <- liftIO $ scatter (getKey groupVals) parallelism evaluated
+  asyncs <- liftIO $ parallelAggregate (getKey groupVals) aggregator chans
+  liftIO $ gather selectVals asyncs
+  --streams <- liftIO $ V.mapM chanToInput chans 
+  -- V.mapM (fork )
+  -- concatInputStreams $ V.toList streams
+
+-- runE :: Context -> E a -> IO (Either StaticError (a, Context))
 
 execute' (HashAggregate node selectList groupingKeys@(k:ks) cond) = do
   evaluated <- execute' node
@@ -175,6 +198,62 @@ execute' (HashAggregate node selectList groupingKeys@(k:ks) cond) = do
   aggregator <- liftEither $ getAggregator selectMap selectVals groupVals
   aggMap <- liftIO $ SC.fold aggregator HM.empty evaluated
   liftIO $ (SL.fromList $ HM.toList aggMap) >>= SC.map (resolveAggRow selectVals)
+  
+
+-- threadsafe stream
+-- n threads, each reads from stream
+-- performs aggregation
+-- Aync  a Map 
+
+scatter :: Hashable k
+        => (a -> k)
+        -> Int 
+        -> InputStream a
+        -> IO (V.Vector (Chan (Maybe a)))
+scatter getKey parallelism inputStream = do
+  input <- newChan
+  outputs <- V.generateM parallelism $ const newChan
+  inputToChan inputStream input
+  forkIO $ go input outputs
+  return outputs
+  where
+  --  go :: Chan (Maybe a) -> V.Vector (Chan (Maybe a)) -> IO ()
+    go input outputChans = do
+      maybeRow <- readChan input
+      case maybeRow of
+          Just row -> do
+              let idx = (hash $ getKey row) `mod` (V.length outputChans)
+              writeChan (outputChans V.! idx) $ Just row
+              go input outputChans
+          Nothing -> do
+              V.mapM_ (\oc -> writeChan oc Nothing) outputChans
+              return ()
+
+parallelAggregate :: Hashable k
+                  => (a -> k)
+                  -> (HM.Map k b -> a -> HM.Map k b)
+                  -> V.Vector (Chan (Maybe a))
+                  -> IO [Async (HM.Map k b) ]
+parallelAggregate getKey aggregator channels = 
+-- async . (go HM.empty)
+  fmap V.toList $ V.forM channels  (\chan -> async $ go HM.empty chan)
+  where
+    go accumulatedMap channel = do
+        maybeRow <- readChan channel
+        case maybeRow of
+          Just row -> return $ aggregator accumulatedMap row
+          Nothing -> return accumulatedMap
+
+
+gather  :: Traversable t =>
+     [SelectVal (ErrR Prim)]
+     -> t (Async (HM.Map Key AggRow))
+     -> IO (InputStream Row)
+gather selectVals asyncs = do
+  -- vec of lists of rows
+  rows <- mapM (\async -> HM.toList <$> wait async ) asyncs
+  SL.fromList $ fmap (resolveAggRow selectVals) $ concat rows 
+
 
 resolveAggRow :: [SelectVal (ErrR Prim)] -> (Key, AggRow) -> Row
 resolveAggRow selectVals (key, aggRow) = V.fromList $ catMaybes $ fmap resolve $ zip [0..] selectVals
@@ -288,7 +367,7 @@ getRowAggregator selectVals = do
       Just agg ->  Just $ f agg row
       Nothing -> Nothing
 
-getAggregator :: HeaderMap -> [SelectVal (ErrR Prim)] -> [SelectVal (ErrR Prim)]  -> ErrS (AggMap -> Row -> AggMap)
+getAggregator :: HeaderMap -> [SelectVal (ErrR Prim)] -> [SelectVal (ErrR Prim)] -> ErrS (AggMap -> Row -> AggMap)
 getAggregator headerMap selectVals groupVals = do
     aggregator <- getRowAggregator selectVals
     return $ closure groupVals aggregator

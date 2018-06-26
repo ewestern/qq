@@ -1,15 +1,21 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Main where
 
-import System.IO.Streams (InputStream, OutputStream, makeOutputStream, peek, connect)
+import System.IO.Streams (InputStream, OutputStream, makeOutputStream, peek, connect, write)
+import qualified System.IO.Streams.Combinators as SC
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import Control.Monad.Except
 import Control.Monad.Trans.State.Lazy
 import Text.Parsec (parse, eof)
 import Options.Applicative (execParser)
+import System.IO (hPutStrLn, stderr)
+import Data.Csv.Incremental (encodeRecord, encode)
+import qualified Data.ByteString.Lazy.Char8 as BC
+import Control.Exception (throw)
 
 import Execute
 import Cli
@@ -17,6 +23,7 @@ import Parse
 import Types
 import Plan
 import Sql.Lexer (Parser)
+import Sql.Syntax (Prim(..))
 import Sql.Parser (parseQueryExpr)
 
 
@@ -28,32 +35,32 @@ run p s = case parse (p <* eof) "Command-line SQL"  s of
 
 type Delimiter = Char
 
-showPrimRow :: Delimiter -> Row  -> String
-showPrimRow c v = (show $ V.head v) ++ (V.foldl (\s p -> c:(s ++ (show p))) "" $ V.tail v)
+printer :: Maybe (V.Vector Prim) ->  IO ()
+printer Nothing = return ()
+printer (Just row) = BC.putStr $ encode $ encodeRecord row
 
 
-printer :: Delimiter -> Maybe Row ->  IO ()
-printer _ Nothing = return ()
-printer c (Just v) = print $ showPrimRow c v
+printSink  :: IO (OutputStream (V.Vector Prim))
+printSink =  makeOutputStream printer
 
-
-
-printSink  :: IO (OutputStream Row)
-printSink =  makeOutputStream $ printer ','
-
+printHeader :: OutputStream (V.Vector Prim) -> Maybe Header -> IO ()
+printHeader os = \case 
+  Just h -> write (Just $ V.map StringPrim h) os
+  Nothing -> return ()
 
 query :: Args -> IO ()
 query a@(Args command options) = do
   let ctx = Context M.empty M.empty Nothing $ SelectHeaderMap M.empty
       queryExpr = run parseQueryExpr command
   init <- getInitial options queryExpr
-  eitherStream <- runExceptT $ flip evalStateT ctx $ plan init queryExpr >>= execute
+  eitherTuple <- runExceptT $ flip runStateT ctx ( plan (parallelism options) init queryExpr >>= execute  >>= liftIO . (SC.map (fmap throwEither)))
   sink <- printSink
-  case eitherStream of
-    Right input -> connect input sink
+  case eitherTuple of
+    Right (input, context) -> do 
+        print $ _selectHeader context
+        printHeader sink (_selectHeader context)
+        connect input sink
     Left s -> error "ASD"
-
-
 
 main :: IO ()
 main = do

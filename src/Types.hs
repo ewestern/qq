@@ -50,6 +50,11 @@ type HasHeader = Bool
 
 type E = StateT Context (ExceptT StaticError IO)
 
+runE :: Context -> E a -> IO (Either StaticError (a, Context))
+runE ctx em =  runExceptT $ flip runStateT ctx em
+
+  -- eitherTuple <- runExceptT $ flip runStateT ctx ( plan init queryExpr >>= execute  >>= liftIO . (SC.map (fmap throwEither)))
+
 type Err a = Either Error a
 
 type ErrS a = Either StaticError a

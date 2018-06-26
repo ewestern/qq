@@ -23,7 +23,8 @@ data Options
   = Options {
   compression :: Maybe Compression,
   header :: Bool,
-  format :: Format
+  format :: Format,
+  parallelism :: Int
 } deriving (Show, Read)
 
 data Args
@@ -51,6 +52,7 @@ parserOptions = Options
   <$> parseCompression
   <*> parseHeader
   <*> parseFormat
+  <*> (option auto (long "parallelism" <> short 'p' <> help "Maximum number of threads to use."))
 
 parseArgs :: Parser Args
 parseArgs = Args

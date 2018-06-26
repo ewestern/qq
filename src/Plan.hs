@@ -34,10 +34,10 @@ data Node
   | SeqScan SelectList RawCondition TableRef (InputStream RawRow)
   | Sort Node [SortSpec]
   | HashAggregate Node SelectList [ValueExpr] Condition
+  | ParallelAggregate Int Node SelectList [ValueExpr] Condition
   | NestedLoop Node Node Condition
   | HashJoin Node Node Condition
   | MergeJoin Node Node Condition
-  | ParallelAggregate Node Condition
   | Eval SelectList -- doesn't use stream
 
 instance Show Node where
@@ -46,7 +46,7 @@ instance Show Node where
   show (Sort n _) = "Sort(" ++ (show n) ++ ")"
   show _ = "ASD"
 
-throwEither :: ErrS a -> a
+throwEither :: Exception e => Either e  a -> a
 throwEither (Left e) = throw e
 throwEither (Right v) = v
 
@@ -114,10 +114,11 @@ evaluateBinOpPrim (Equality op) (StringPrim a) (StringPrim b) = return $ BoolPri
 
 evaluateBinOpPrim op a b  = throwError $ OperatorError op
 
+getArithFunction :: Num a => ArithmeticOperator -> a -> a -> a
 getArithFunction Plus = (+)
-getArithFunctions Times = (*)
-getArithFunctions Divide = (/)
-getArithFunctions Minus = (-)
+getArithFunction Times = (*)
+--getArithFunction Divide = (/)
+getArithFunction Minus = (-)
 
 getEqualFunctions Equals = (==)
 getEqualFunctions NotEquals = (/=)
@@ -129,34 +130,36 @@ updateContext tr rc  = rawContexts %~ (M.insert tr rc)
 
 
 
-plan :: [(RawContext, InputStream RawRow)] -> QueryExpr -> E Plan
+plan :: Int -> [(RawContext, InputStream RawRow)] -> QueryExpr -> E Plan
 -- seems like we should be able to generalize this away
-plan _ (Select _ sl [] _ _ _ _ _) = undefined 
+plan _ _ (Select _ sl [] _ _ _ _ _) = undefined 
 
 -- a select on a single table
-plan [(rc, stream)] (Select _ sl [tr] w [] Nothing [] Nothing) = do
+plan _ [(rc, stream)] (Select _ sl [tr] w [] Nothing [] Nothing) = do
     modify (updateContext tr rc)
     let headerMap = unRawHeaderMap $ rc ^. rawHeaderMap
         condition = throwEither $ getCondition headerMap w
     return $ Plan (SeqScan sl condition tr stream)
 
-plan h (Select sq selectList tables whereClause groupBys having orders (Just ve)) = do
-  (Plan node) <- plan h $ Select sq selectList tables whereClause groupBys having orders Nothing
+plan p h (Select sq selectList tables whereClause groupBys having orders (Just ve)) = do
+  (Plan node) <- plan p h $ Select sq selectList tables whereClause groupBys having orders Nothing
   selectHeaderMap <- gets $ flip (^.) selectHeaderMap
   case evaluateTerm (unSelectHeaderMap selectHeaderMap) $ term ve of
     Right ((SelectPrim (IntPrim i) )::SelectVal Prim) -> return $ Plan (Limit node $ fromIntegral i) 
     _   -> throw $ TypeError "Invalid LIMIT expression." (show ve )
 
-plan h (Select sq selectList tables whereClause groupBys having order@(o:os) Nothing) = do
-  (Plan node) <- plan h $ Select sq selectList tables whereClause groupBys having [] Nothing
+plan p h (Select sq selectList tables whereClause groupBys having order@(o:os) Nothing) = do
+  (Plan node) <- plan p h $ Select sq selectList tables whereClause groupBys having [] Nothing
   return $ Plan (Sort node order) 
   
-plan h (Select sq selectList tables whereClause groupingKeys having [] Nothing) = do
-  (Plan node) <- plan h $ Select sq selectList tables whereClause [] having [] Nothing
+plan p h (Select sq selectList tables whereClause groupingKeys having [] Nothing) = do
+  (Plan node) <- plan p h $ Select sq selectList tables whereClause [] having [] Nothing
   selectHeaderMap <- gets $ flip (^.) selectHeaderMap
   let condition = throwEither $ getCondition (unSelectHeaderMap selectHeaderMap) having
-  return $ Plan (HashAggregate node selectList groupingKeys condition)
+  if p > 1
+    then return $ Plan (ParallelAggregate p node selectList groupingKeys condition)
+    else return $ Plan (HashAggregate node selectList groupingKeys condition)
 
-plan _ _ = undefined
+plan _ _ _ = undefined
 
 
