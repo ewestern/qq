@@ -6,6 +6,8 @@ module Main where
 
 import System.IO.Streams (InputStream, OutputStream, makeOutputStream, peek, connect, write)
 import qualified System.IO.Streams.Combinators as SC
+import qualified System.IO.Streams.List as SL
+import System.IO.Streams.Handle (stdout)
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import Control.Monad.Except
@@ -15,7 +17,9 @@ import Options.Applicative (execParser)
 import System.IO (hPutStrLn, stderr)
 import Data.Csv.Incremental (encodeRecord, encode)
 import qualified Data.ByteString.Lazy.Char8 as BC
+import qualified Data.ByteString.Char8 as BCS
 import Control.Exception (throw)
+import Debug.Trace
 
 import Execute
 import Cli
@@ -52,6 +56,11 @@ printHeader os = \case
   Just h -> write (Just $ V.map (Right . StringPrim) h) os
   Nothing -> return ()
 
+prettify :: Row -> BCS.ByteString
+prettify row = BC.toStrict $ encode $ encodeRecord $ V.map swallowError row
+
+
+
 query :: Args -> IO ()
 query a@(Args command options) = do
   let ctx = Context M.empty M.empty Nothing $ SelectHeaderMap M.empty
@@ -59,11 +68,14 @@ query a@(Args command options) = do
   init <- getInitial options queryExpr
 -- TODO: figure out what to do with Row Errors!!
   eitherTuple <- runExceptT $ flip runStateT ctx ( plan (parallelism options) init queryExpr >>= execute) --   >>= liftIO . (SC.map (fmap throwEither)))
-  sink <- printSink
+  -- sink <- stdout
+  --traceShowM "map converted??"
   case eitherTuple of
     Right (input, context) -> do 
-        printHeader sink (_selectHeader context)
-        connect input sink
+        SL.toList input >>= print
+        -- printHeader sink (_selectHeader context)
+        --pretty <- SC.map prettify input
+        --connect pretty stdout
     Left s -> error "ASD"
 
 main :: IO ()

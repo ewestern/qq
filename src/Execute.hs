@@ -38,7 +38,7 @@ import Data.Tuple (swap)
 import Data.List (sortBy, partition, (\\))
 import Control.Exception (Exception, throw)
 -- import Control.E
-import qualified Data.HashMap as HM
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Vector as V
 import qualified Data.Bifunctor as BF
 import qualified Data.Map as M
@@ -62,7 +62,7 @@ import Parse
 
 type Key = [Maybe (ErrR Prim)]
 
-type AggMap = HM.Map Key AggRow
+type AggMap = HM.HashMap Key AggRow
 
 
 
@@ -231,9 +231,9 @@ scatter getKey parallelism inputStream = do
 
 parallelAggregate :: Hashable k
                   => (a -> k)
-                  -> (HM.Map k b -> a -> HM.Map k b)
+                  -> (HM.HashMap k b -> a -> HM.HashMap k b)
                   -> V.Vector (Chan (Maybe a))
-                  -> IO [Async (HM.Map k b) ]
+                  -> IO [Async (HM.HashMap k b) ]
 parallelAggregate getKey aggregator channels = 
 -- async . (go HM.empty)
   fmap V.toList $ V.forM channels  (\chan -> async $ go HM.empty chan)
@@ -241,13 +241,13 @@ parallelAggregate getKey aggregator channels =
     go accumulatedMap channel = do
         maybeRow <- readChan channel
         case maybeRow of
-          Just row -> return $ aggregator accumulatedMap row
+          Just row -> go (aggregator accumulatedMap row) channel
           Nothing -> return accumulatedMap
 
 
 gather  :: Traversable t =>
      [SelectVal (ErrR Prim)]
-     -> t (Async (HM.Map Key AggRow))
+     -> t (Async (HM.HashMap Key AggRow))
      -> IO (InputStream Row)
 gather selectVals asyncs = do
   -- vec of lists of rows

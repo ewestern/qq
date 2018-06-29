@@ -27,15 +27,10 @@ import qualified Data.ByteString.Char8 as BC
 import qualified System.IO.Streams as S
 import qualified System.IO.Streams.Combinators as SC
 import qualified System.IO.Streams.Attoparsec as SA
- 
 
 import Types
 
-{-
-Want to make a InputStream using Attoparsec and Cassava
-
--}
-
+import Debug.Trace
 
 parseCsv :: HasHeader -> S.InputStream BS.ByteString -> IO (Maybe Header, S.InputStream RawRow)
 parseCsv True tr = do

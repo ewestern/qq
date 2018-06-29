@@ -33,7 +33,7 @@ library:
   - io-streams
   - containers
   - mtl
-  - hashmap
+  - unordered-containers
   - hashable 
   - transformers
   - lens
