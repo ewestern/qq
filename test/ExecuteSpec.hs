@@ -29,9 +29,10 @@ doParse s = case parse (parseQueryExpr <* eof) ""  s of
 testCSV = "foo,bar,baz\npeter,1,2\nwas,3,4\nhere,5,6\nalabama,7,8\narkansas,9,10"
 
 options = Options Nothing True Csv 1
+headerlessOptions = Options Nothing False Csv 1
 
-query' :: String -> IO (InputStream Row)
-query'  command = do
+query' :: Options -> String -> IO (InputStream Row)
+query' options command = do
   let ctx = Context M.empty M.empty Nothing $ SelectHeaderMap M.empty
       queryExpr = doParse command
   init <- getInitial options queryExpr
@@ -64,27 +65,34 @@ spec = do
   describe "Execution" $ do
     it "Tests Limits" $ do
       let s = "select * from test/resources/test1.csv limit 2"
-      outputRow <- query' s
+      outputRow <- query' options s
       ls <- SL.toList outputRow
       length ls `shouldBe` 2
     it "tests order by" $ do
       let s =  "select num_failures as type int from test/resources/test1.csv order by num_failures"
-      outputRow <- query' s
+      outputRow <- query' options s
       ls <- SL.toList outputRow
       let expected = (fmap ((flip V.cons V.empty) . Right . IntPrim)) [21, 24, 28, 41, 49, 80, 134, 139, 144]
       ls `shouldBe` expected
     it "tests aggregate functions" $ do
       let s = "select script, sum(num_failures) from test/resources/test1.csv group by script"
-      outputRow <- query' s
+      outputRow <- query' options s
       ls <- SL.toList outputRow
       (length ls) `shouldBe` 6
 
     it "tests filters" $ do
       --let s = "select script, num_failures from test/resources/test1.csv where true"
       let s = "select script, num_failures from test/resources/test1.csv where script = 'check_disk.sh'"
-      outputRow <- query' s
+      outputRow <- query' options s
       ls <- SL.toList outputRow
       (length ls) `shouldBe` 2
+
+    it "tests anonymous columns" $ do
+      let s = "select c1, c2 from test/resources/test2.csv where c1 = 'check_disk.sh'"
+      outputRow <- query' headerlessOptions s
+      ls <- SL.toList outputRow
+      (length ls) `shouldBe` 2
+
 
 showTable :: Show a => [V.Vector a] -> String
 showTable [] = ""

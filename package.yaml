@@ -40,6 +40,7 @@ library:
   - optparse-generic
   - optparse-applicative
   - async
+  - cassava-streams
 executables:
   qq-exe:
     main:                Main.hs

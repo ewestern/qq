@@ -9,14 +9,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-
-
-
-
-
 module Execute where
 
-import Debug.Trace
 import Data.Data
 import Data.Typeable
 import Data.Hashable
@@ -205,7 +199,7 @@ execute' (HashAggregate node selectList groupingKeys@(k:ks) cond) = do
 -- performs aggregation
 -- Aync  a Map 
 
-scatter :: Hashable k
+scatter :: (Hashable k, Show a)
         => (a -> k)
         -> Int 
         -> InputStream a
@@ -217,7 +211,6 @@ scatter getKey parallelism inputStream = do
   forkIO $ go input outputs
   return outputs
   where
-  --  go :: Chan (Maybe a) -> V.Vector (Chan (Maybe a)) -> IO ()
     go input outputChans = do
       maybeRow <- readChan input
       case maybeRow of
@@ -235,7 +228,6 @@ parallelAggregate :: Hashable k
                   -> V.Vector (Chan (Maybe a))
                   -> IO [Async (HM.HashMap k b) ]
 parallelAggregate getKey aggregator channels = 
--- async . (go HM.empty)
   fmap V.toList $ V.forM channels  (\chan -> async $ go HM.empty chan)
   where
     go accumulatedMap channel = do
