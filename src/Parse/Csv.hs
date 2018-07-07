@@ -21,7 +21,7 @@ import Data.Csv.Parser
 import qualified Data.Csv.Streaming as CS
 import Data.Traversable
 
-import Sql.Syntax (TableRef(..), Prim(..))
+import Sql.Syntax (TableRef(..))
 
 import qualified Data.ByteString.Char8 as BC
 

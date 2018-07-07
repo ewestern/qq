@@ -3,7 +3,7 @@ module ParserSpec where
 import Test.Hspec
 import Parse
 import Parse.Csv
-import Sql.Syntax (TableRef(..), Prim(..))
+import Sql.Syntax (TableRef(..))
 import Types
 
 import qualified System.IO.Streams.List as SL

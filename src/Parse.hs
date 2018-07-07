@@ -6,7 +6,7 @@ import Cli
 import Sql.Lexer (Parser)
 import Sql.Parser (parseQueryExpr)
 import Parse.Csv
-import Sql.Syntax (TableRef(..), Prim(..), Name, from, QueryExpr)
+import Sql.Syntax (TableRef(..), Name, from, QueryExpr)
 import Types
 
 import Control.Lens( (^.), (%~), view, set, use, uses)

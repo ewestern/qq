@@ -1,10 +1,10 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-#LANGUAGE TypeFamilies #-}
-{-#LANGUAGE TypeSynonymInstances #-}
-{-#LANGUAGE FlexibleInstances #-}
-{-#LANGUAGE FlexibleContexts #-}
-{-#LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -53,6 +53,7 @@ import Sql.Syntax
 import Types
 import Parse
 
+import Debug.Trace
 
 type Key = [Maybe (ErrR Prim)]
 
@@ -88,8 +89,9 @@ validateArgumentList func ls = case func of
 getSortingFunction :: [(SelectVal (ErrR Prim), Direction)] -> Row -> Row -> Ordering
 getSortingFunction [] = \_ _ -> EQ
 getSortingFunction ((sv, dir):xs)  =
-  case sv of
+  case traceShowId sv of
     SelectCol f -> \or1 or2 -> sortFunc dir f (getSortingFunction xs) or1 or2
+-- TODO: order by function
     _ -> \ _ _ -> EQ
 
 
@@ -137,6 +139,14 @@ collapsePredicate (Right v) = v
 collapsePredicate _ = False
 
 
+headerFromHeaderMap :: SelectHeaderMap -> Header
+headerFromHeaderMap (SelectHeaderMap hm) = 
+  let vec = V.replicate (M.size hm) ""
+      mkName (qual, name) = maybe name (\q -> q ++ "." ++ name)  qual
+      ls = M.foldlWithKey (\ls tup idx -> (idx, mkName tup):ls) [] hm
+  in V.accum (++) vec ls
+
+
 execute :: Plan -> E (InputStream Row)
 execute (Plan n) = execute' n
 
@@ -152,8 +162,7 @@ execute' (SeqScan selectList cond tr inputStream)  = do
   let rawHeaders = M.foldlWithKey (\acc k rc -> M.insert (getTableAlias k) (rc ^. rawHeader) acc) M.empty rcs
       selectHeaders = updateHeaderMap rawHeaders $ fmap term valueExpressions
   modify (set selectHeaderMap selectHeaders )
-  --modify (set selectHeader $ Just $ fmap () 
-  -- TODO!
+  modify (set selectHeader $ headerFromHeaderMap selectHeaders)
   return evaluatedStream
 
 execute' (Limit node i) = execute' node >>= (liftIO . SC.take (fromIntegral i))
@@ -261,6 +270,11 @@ resolveAggRow selectVals (key, aggRow) = V.fromList $ catMaybes $ fmap resolve $
 resolveAggregation :: Aggregation -> ErrR Prim
 resolveAggregation = \case
   Default p -> p
+  Average (sum, count) -> do
+    s <- sum
+    c <- count
+    s /# c
+    -- curry (numericOpPrim (/))  s c
 
 aggregateFunctions = S.fromList
   [FnSum, FnAvg ]
@@ -284,6 +298,14 @@ validateAggregateQuery selectList groupBys =
         True -> return ()
         _       -> throwError $ GroupError "asd"
 
+{-
+fractionalOpPrim :: (MonadError RuntimeError m ) => (forall n. Fractional n => n -> n -> n) -> (Prim, Prim) -> m Prim
+fractionalOpPrim func = \case
+  (FloatPrim f
+-}
+
+
+{-
 numericOpPrim :: (MonadError RuntimeError m ) => (forall n. Num n => n -> n -> n) -> (Prim, Prim) -> m Prim
 numericOpPrim func = \case
   (IntPrim i1, IntPrim i2) -> return $ IntPrim $ func i1 i2
@@ -292,6 +314,7 @@ numericOpPrim func = \case
   (FloatPrim f1, FloatPrim f2) -> return $ FloatPrim $ func f1 f2
   (a, b) -> throwError $ TypeError "Tried to perform a numeric operation on: " (show a ++ " " ++ show b)
 
+-}
 
 getSumAggregator :: [SelectVal (ErrR Prim)] -> ErrS (Aggregation -> Row -> Aggregation)
 -- should handle all Select* cases.
@@ -302,7 +325,8 @@ getSumAggregator (sv:[]) = case sv of
     closure f (Default eitherPrim) row = Default $ do
       prim1 <- f row >>= (getCoercion (Just Float))
       prim2 <- eitherPrim >>= (getCoercion (Just Float))
-      numericOpPrim (+) (prim1, prim2)
+      prim1 +# prim2
+      -- numericOpPrim (+) (prim1, prim2)
   SelectFunc a b -> undefined -- ???
   SelectStar -> undefined
 

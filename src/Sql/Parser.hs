@@ -75,12 +75,11 @@ parseCoercion = optionMaybe $ do
   parseValueType
 
 
--- TODO
 parseSetQuantifier  :: Parser SetQuantifier
 parseSetQuantifier = pure SQDefault
 
 parsePath :: Parser String
-parsePath = many1 (alphaNum <|> oneOf "/.") <* spaces
+parsePath = identifier <?> "PATH" 
 
 parseFrom :: Parser [TableRef]
 parseFrom = do
@@ -93,13 +92,10 @@ parseFrom = do
     pDash = reservedOp "-"
 
 parseWhere :: Parser (Maybe ValueExpr)
-parseWhere = optionMaybe (reserved "where" >>  parseValueExpr)
+parseWhere = optionMaybe (reserved "where" >>  parseValueExpr) <?> "WHERE clause"
     
-{-
--}
-
 parseGroupBy :: Parser [ValueExpr]
-parseGroupBy = pGroupBy <|> return []
+parseGroupBy = pGroupBy <|> return [] <?> "GROUP BY clause"
   where
     pGroupBy = do
       _ <- reserved "group" >> reserved "by"
@@ -123,13 +119,15 @@ parseSortSpec = SortSpec <$> parseValueExpr <*> parseDirection
       
 
 parseOrderBy :: Parser [SortSpec]
-parseOrderBy = option [] $ do
-    _ <- reserved "order"
-    _ <- reserved "by"
-    commaSep1 parseSortSpec
+parseOrderBy = option [] pClause <?> "ORDER BY clause"
+  where 
+    pClause = do
+      _ <- reserved "order"
+      _ <- reserved "by"
+      commaSep1 parseSortSpec
 
 parseLimit :: Parser (Maybe ValueExpr)
-parseLimit = optionMaybe (reserved "limit" >> parseValueExpr)
+parseLimit = optionMaybe (reserved "limit" >> parseValueExpr) <?> "LIMIT clause"
 
 parseHaving :: Parser (Maybe ValueExpr)
 parseHaving = pure Nothing

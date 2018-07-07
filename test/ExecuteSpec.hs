@@ -33,7 +33,7 @@ headerlessOptions = Options Nothing False Csv 1
 
 query' :: Options -> String -> IO (InputStream Row)
 query' options command = do
-  let ctx = Context M.empty M.empty Nothing $ SelectHeaderMap M.empty
+  let ctx = Context M.empty M.empty (V.fromList ["foo", "bar", "baz"]) $ SelectHeaderMap M.empty
       queryExpr = doParse command
   init <- getInitial options queryExpr
   eitherStream <- runExceptT $ flip evalStateT ctx $ plan 1 init queryExpr >>= execute

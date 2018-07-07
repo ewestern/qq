@@ -27,7 +27,6 @@ import Parse
 import Types
 import Plan
 import Sql.Lexer (Parser)
-import Sql.Syntax (Prim(..))
 import Sql.Parser (parseQueryExpr)
 
 
@@ -51,10 +50,8 @@ swallowError (Left e) = StringPrim "ERR"
 printSink  :: IO (OutputStream Row)
 printSink =  makeOutputStream printer
 
-printHeader :: OutputStream Row  -> Maybe Header -> IO ()
-printHeader os = \case 
-  Just h -> write (Just $ V.map (Right . StringPrim) h) os
-  Nothing -> return ()
+printHeader :: OutputStream BCS.ByteString -> Header -> IO ()
+printHeader os h = write (Just $ prettify $ V.map (Right . StringPrim) h) os
 
 prettify :: Row -> BCS.ByteString
 prettify row = BC.toStrict $ encode $ encodeRecord $ V.map swallowError row
@@ -63,7 +60,7 @@ prettify row = BC.toStrict $ encode $ encodeRecord $ V.map swallowError row
 
 query :: Args -> IO ()
 query a@(Args command options) = do
-  let ctx = Context M.empty M.empty Nothing $ SelectHeaderMap M.empty
+  let ctx = Context M.empty M.empty V.empty $ SelectHeaderMap M.empty
       queryExpr = run parseQueryExpr command
   init <- getInitial options queryExpr
 -- TODO: figure out what to do with Row Errors!!
@@ -72,10 +69,9 @@ query a@(Args command options) = do
   --traceShowM "map converted??"
   case eitherTuple of
     Right (input, context) -> do 
-        SL.toList input >>= print
-        -- printHeader sink (_selectHeader context)
-        --pretty <- SC.map prettify input
-        --connect pretty stdout
+        printHeader stdout (_selectHeader context)
+        pretty <- SC.map prettify input
+        connect pretty stdout
     Left s -> error "ASD"
 
 main :: IO ()

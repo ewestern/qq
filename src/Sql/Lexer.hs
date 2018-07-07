@@ -10,8 +10,10 @@ type Parser = Parsec String ()
 
 lexer = Tok.makeTokenParser $ emptyDef { 
       Tok.reservedNames = ["select", "from", "group", "by", "where", "having", "order", "in", "limit", "string", "int", "float", "bool", "type"]
-    , Tok.reservedOpNames = ["(", ")", "+", "-", "/", "*" , ",", ";", "."]
+    , Tok.reservedOpNames = ["(", ")", "+", "-", "/", "*" , ",", ";"]
     , Tok.caseSensitive = False
+    , Tok.identStart = alphaNum <|> (oneOf "./_-")
+    , Tok.identLetter = alphaNum <|> (oneOf "./_-")
   }
 
 
