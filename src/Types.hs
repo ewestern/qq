@@ -1,5 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-#LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -10,11 +12,11 @@
 module Types where
 
 import Control.Lens hiding (Context)
-import Data.Data
-import Data.Typeable
+-- import Data.Data
+-- import Data.Typeable
 import Data.Hashable
 import Control.Exception (Exception, throw)
-import GHC.Generics (Generic)
+import GHC.Generics
 import Data.Char (toLower)
 import Text.Read (readMaybe)
 
@@ -47,9 +49,10 @@ instance ToField Prim where
     StringPrim s -> BC.pack s
     BoolPrim b -> BC.pack $ show b
     
-    
-    
 
+class Foo a where
+  
+    
 instance Hashable Prim
 
 class Coercible a => Numeric a where
@@ -61,8 +64,9 @@ class Coercible a => Numeric a where
 instance Numeric Prim where
   (+#) = addPrim
   (/#) = undefined
-  
 
+
+--
 data SelectVal a where
   SelectPrim :: Prim -> SelectVal a
   -- TODO: we can probably replace the function with just the index.
@@ -85,8 +89,6 @@ type E = StateT Context (ExceptT StaticError IO)
 
 runE :: Context -> E a -> IO (Either StaticError (a, Context))
 runE ctx em =  runExceptT $ flip runStateT ctx em
-
-  -- eitherTuple <- runExceptT $ flip runStateT ctx ( plan init queryExpr >>= execute  >>= liftIO . (SC.map (fmap throwEither)))
 
 type Err a = Either Error a
 
@@ -162,21 +164,39 @@ data Context = Context {
 class Coercible a where
   getCoercion :: (Maybe ValueType) -> a -> ErrR Prim
   toPrim ::  a -> ErrR Prim
+  typeOf :: a -> ValueType
 
 instance Coercible String where
   getCoercion = getStringCoercion'
   toPrim = return . StringPrim
+  typeOf _ = String
 
 instance Coercible Prim where
   getCoercion vt p = coercePrim vt p
   toPrim = return
+  typeOf = \case
+    IntPrim _ -> Int
+    FloatPrim _  -> Float
+    StringPrim _ -> String
+    BoolPrim _ -> Bool
 
 instance Coercible (ErrR Prim) where
   getCoercion vt ep = ep >>= (coercePrim vt)
   toPrim = id
 
+-- String -> Other
+numericConversionRules :: Prim -> Prim -> ErrR Prim
+numericConversionRules s@(StringPrim _) other = coercePrim (Just (typeOf other)) s
+numericConversionRules i@(IntPrim i1) other = case other of
+  FloatPrim f -> return $ FloatPrim $ fromIntegral i1
+  _ -> i
+numericConversionRules a b = a
+
+
 
 addPrim :: Prim -> Prim -> ErrR Prim
+addPrim a b = do
+  numericConversionRules
 addPrim (IntPrim i1) (IntPrim i2) = Right $ IntPrim (i1 + i2)
 addPrim (IntPrim i1) (FloatPrim f1) = Right $ FloatPrim (f1 + (fromIntegral i1))
 addPrim f@(FloatPrim _) i@(IntPrim _) = addPrim i f
@@ -186,6 +206,21 @@ addPrim i@(IntPrim _) s@(StringPrim _) = addPrim s i
 addPrim s@(StringPrim _) f@(FloatPrim _) = coercePrim (Just Float) s >>= (addPrim f)
 addPrim f@(FloatPrim _) s@(StringPrim _) = addPrim s f
 addPrim _ _ = Left $ TypeError "Cannot add types: " ""
+
+
+subtractPrim :: Prim -> Prim -> ErrR Prim
+subtractPrim (IntPrim i1) (IntPrim i2) = Right $ IntPrim (i1 - i2)
+subtractPrim (IntPrim i1) (FloatPrim f1) = Right $ FloatPrim ((fromIntegral i1) - f1)
+subtractPrim (FloatPrim f1) (IntPrim i1) = Right $ FloatPrim (f1 - (fromIntegral i1))
+subtractPrim (FloatPrim f1) (FloatPrim f2) = Right $ FloatPrim (f1 - f2)
+
+subtractPrim s@(StringPrim _) i@(IntPrim _) =  coercePrim (Just Int) s >>= (flip subtractPrim i)
+subtractPrim s@(StringPrim _) f@(FloatPrim _) = coercePrim (Just Float) s >>= (flip subtractPrim f)
+subtractPrim i@(IntPrim _) s@(StringPrim _) = coercePrim (Just Int) s >>= (subtractPrim i)
+subtractPrim f@(FloatPrim _) s@(StringPrim _) = undefined-- coercePrim (Just Int) s >>= (subtractPrim i)
+
+subtractPrim _ _ = Left $ TypeError "Cannot add types: " ""
+
 
 
 
