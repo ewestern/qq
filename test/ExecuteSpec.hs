@@ -10,6 +10,7 @@ import Parse
 import Execute
 import Plan
 import Types
+import Coercions
 import Data.List (intercalate)
 
 import qualified Data.Map as M
@@ -81,7 +82,6 @@ spec = do
       (length ls) `shouldBe` 6
 
     it "tests filters" $ do
-      --let s = "select script, num_failures from test/resources/test1.csv where true"
       let s = "select script, num_failures from test/resources/test1.csv where script = 'check_disk.sh'"
       outputRow <- query' options s
       ls <- SL.toList outputRow

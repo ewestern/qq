@@ -51,6 +51,8 @@ import qualified System.IO.Streams.List as SL
 import Plan
 import Sql.Syntax
 import Types
+import Coercions
+import Numeric
 import Parse
 
 import Debug.Trace

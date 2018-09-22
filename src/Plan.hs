@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-#LANGUAGE LambdaCase #-}
+{-#LANGUAGE GADTs #-}
 {-#LANGUAGE FlexibleContexts #-}
 {-#LANGUAGE FlexibleInstances #-}
 
@@ -19,6 +20,8 @@ import System.IO.Streams (InputStream)
 
 import Sql.Syntax
 import Parse.Csv
+import Coercions
+import Numeric
 import Types
 
 newtype Plan = Plan {
@@ -27,6 +30,22 @@ newtype Plan = Plan {
 
 type Condition = Row -> ErrR Bool
 type RawCondition = RawRow -> ErrR Bool
+
+data SelectVal a where
+  SelectPrim :: Prim -> SelectVal a
+  -- TODO: we can probably replace the function with just the index.
+  SelectCol :: Coercible a => (V.Vector a -> ErrR Prim) -> SelectVal a
+  -- SelectCol :: Int -> SelectVal a
+  SelectFunc :: Coercible a => Function -> [SelectVal a] -> SelectVal a
+  SelectStar :: SelectVal a
+
+instance Show (SelectVal a) where
+  show (SelectPrim p) = "SelectPrim (" ++ (show p) ++ ")"
+  show (SelectCol _) = "SelectCol"
+  show (SelectFunc f ves) = "SelectFunc " ++ (show f) ++ (show ves)
+  show SelectStar = "SelectStar"
+
+
 
 
 data Node
@@ -92,27 +111,29 @@ evaluateTerm headerMap term' =  case term' of
     fixError :: Either e Prim -> ErrS Prim 
     fixError = first (const $ CoercionError "asd")
 
-  -- SelectFunc :: Coercible a => Function -> [SelectVal a] -> SelectVal a
-evaluateBinOp :: MonadError StaticError m => BinOperator -> SelectVal a -> SelectVal a -> m (SelectVal a)
-evaluateBinOp bop (SelectPrim p1) (SelectPrim p2) = SelectPrim <$> evaluateBinOpPrim bop p1 p2
+evaluateBinOp :: BinOperator -> SelectVal a -> SelectVal a -> ErrS (SelectVal a)
+evaluateBinOp bop (SelectPrim p1) (SelectPrim p2) = first (const $ OperatorError bop) $ SelectPrim <$> evaluateBinOpPrim bop p1 p2
 evaluateBinOp bop (SelectCol f) (SelectPrim p) = 
-    return $ SelectCol $ \r -> f r >>= (\p1 -> first (const $ TypeError "asd" "dsa") $ evaluateBinOpPrim bop p1 p)
+    return $ SelectCol $ \r -> f r >>= (\p1 ->  evaluateBinOpPrim bop p1 p)
 -- Order of operation matters!
 evaluateBinOp bop (SelectPrim p) (SelectCol f) =
     return $ SelectCol $ \r -> do
-        prim <- f r
-        first (const $ TypeError "asd" "dsa") $ evaluateBinOpPrim bop p prim
-evaluateBinOp bop SelectStar x = throwError $ OperatorError bop
-evaluateBinOp bop x SelectStar = throwError $ OperatorError bop
+       prim <- f r
+       evaluateBinOpPrim bop p prim
+evaluateBinOp bop SelectStar x = Left $ OperatorError bop
+evaluateBinOp bop x SelectStar = Left $ OperatorError bop
     
-evaluateBinOpPrim :: MonadError StaticError m => BinOperator -> Prim -> Prim -> m Prim
-evaluateBinOpPrim (Arithmetic op) (IntPrim a) (IntPrim b) = return $ IntPrim $ (getArithFunction op) a b
-evaluateBinOpPrim (Arithmetic op) (FloatPrim a) (FloatPrim b) = return $ FloatPrim $ (getArithFunction op) a b
+evaluateBinOpPrim :: BinOperator -> Prim -> Prim -> ErrR Prim
+evaluateBinOpPrim (Arithmetic op) p1 p2 = case op of
+  Plus -> p1 +# p2
+  Minus -> p1 -# p2
+  Times -> p1 *# p2
+  Divide -> p1 /# p2
 evaluateBinOpPrim (Equality op) (IntPrim a) (IntPrim b) = return $ BoolPrim $ (getEqualFunctions op) a b
 evaluateBinOpPrim (Equality op) (FloatPrim a) (FloatPrim b) = return $ BoolPrim $ (getEqualFunctions op) a b
 evaluateBinOpPrim (Equality op) (StringPrim a) (StringPrim b) = return $ BoolPrim $ (getEqualFunctions op) a b
 
-evaluateBinOpPrim op a b  = throwError $ OperatorError op
+--evaluateBinOpPrim op a b  = throwError $ OperatorError op
 
 getArithFunction :: Num a => ArithmeticOperator -> a -> a -> a
 getArithFunction Plus = (+)
