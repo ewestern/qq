@@ -152,7 +152,14 @@ headerFromHeaderMap (SelectHeaderMap hm) =
 execute :: Plan -> E (InputStream Row)
 execute (Plan n) = execute' n
 
+
 execute' :: Node -> E (InputStream Row)
+execute' (Eval selectList) = do
+  let valueExpressions = fmap fst selectList
+      result =  evaluateSingleRow M.empty valueExpressions
+      eitherRow = throwEither $ fmap ($ V.empty) result -- kinda hacky
+  liftIO $ SL.fromList [eitherRow]
+
 execute' (SeqScan selectList cond tr inputStream)  = do
   (Just rc) <- gets $ M.lookup tr . flip (^.) rawContexts 
   filteredStream <- liftIO $ SC.filter (collapsePredicate . cond) inputStream

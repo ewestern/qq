@@ -92,6 +92,11 @@ spec = do
       outputRow <- query' headerlessOptions s
       ls <- SL.toList outputRow
       (length ls) `shouldBe` 2
+    it "evaluates a statement without a table" $ do
+      let s = "select 1 + 3"
+      output <- query' headerlessOptions s
+      ls <- SL.toList output
+      ls `shouldBe` [V.singleton $ Right $ IntPrim 4]
 
 
 showTable :: Show a => [V.Vector a] -> String

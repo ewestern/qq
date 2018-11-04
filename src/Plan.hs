@@ -98,7 +98,6 @@ evaluateTerm headerMap term' =  case term' of
           Nothing -> throwError $ ColumnError name
 
   App func valueExprs c -> do
-    -- TODO: Coercion?
     svs <- mapM (evaluateTerm headerMap) $ fmap term valueExprs
     return $ SelectFunc func svs
 
@@ -153,7 +152,7 @@ updateContext tr rc  = rawContexts %~ (M.insert tr rc)
 
 plan :: Int -> [(RawContext, InputStream RawRow)] -> QueryExpr -> E Plan
 -- seems like we should be able to generalize this away
-plan _ _ (Select _ sl [] _ _ _ _ _) = undefined 
+plan _ _ (Select _ sl [] _ _ _ _ _) = return $ Plan $ Eval sl
 
 -- a select on a single table
 plan _ [(rc, stream)] (Select _ sl [tr] w [] Nothing [] Nothing) = do

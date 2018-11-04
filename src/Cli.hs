@@ -52,7 +52,7 @@ parserOptions = Options
   <$> parseCompression
   <*> parseHeader
   <*> parseFormat
-  <*> (option auto (long "parallelism" <> short 'p' <> help "Maximum number of threads to use."))
+  <*> (option auto (long "parallelism" <> short 'p' <> help "Maximum number of threads to use." <> value 1))
 
 parseArgs :: Parser Args
 parseArgs = Args
