@@ -64,9 +64,7 @@ query a@(Args command options) = do
       queryExpr = run parseQueryExpr command
   init <- getInitial options queryExpr
 -- TODO: figure out what to do with Row Errors!!
-  eitherTuple <- runExceptT $ flip runStateT ctx ( plan (parallelism options) init queryExpr >>= execute) --   >>= liftIO . (SC.map (fmap throwEither)))
-  -- sink <- stdout
-  --traceShowM "map converted??"
+  eitherTuple <- runExceptT $ flip runStateT ctx ( plan (parallelism options) init queryExpr >>= execute) 
   case eitherTuple of
     Right (input, context) -> do 
         printHeader stdout (_selectHeader context)

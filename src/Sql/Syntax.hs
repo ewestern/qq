@@ -34,12 +34,6 @@ newtype ValueExpr = ValueExpr {
   term :: Term
 } deriving (Eq, Ord, Show, Data, Typeable)
 
---data ValueExpr = ValueExpr {
---    valueTerm :: Term 
---  , valueType :: Maybe (ValueType)
---} deriving (Eq, Ord, Show, Data, Typeable)
---
-
 data InPredValue
   = InList [ValueExpr]
   | InQueryExpr QueryExpr deriving (Eq, Ord, Show, Data, Typeable)
@@ -99,13 +93,6 @@ data SortSpec = SortSpec {
 
 
 data CombineOp = Union | Except | Intersect deriving (Eq, Ord, Show, Data, Typeable)
-
-
--- basicSelectStr :: String -> QueryExpr
--- basicSelectStr s = Select SQDefault [(ValueExpr (StringLit s) Nothing , Nothing)] [] Nothing [] Nothing [] Nothing
--- 
--- basicSelectInt i = Select SQDefault [(ValueExpr (IntLit i) Nothing , Nothing)] [] Nothing [] Nothing [] Nothing
--- 
 
 data TableExpression
     = TableExpression
