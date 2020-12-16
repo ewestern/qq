@@ -16,11 +16,6 @@ import qualified Data.Map as M
 import qualified Data.Vector as V
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BC
-import qualified System.IO.Streams as S
-import qualified System.IO.Streams.Zlib as Z
-import qualified System.IO.Streams.ByteString as SB
-import System.IO.Streams (InputStream, OutputStream, makeOutputStream, peek)
-import System.IO (openFile, IOMode(..))
 
 
 

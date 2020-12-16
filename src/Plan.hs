@@ -15,7 +15,7 @@ import Control.Monad.Except
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, fromJust,catMaybes)
-import System.IO.Streams (InputStream)
+-- import System.IO.Streams (InputStream)
 
 
 import Sql.Syntax
@@ -50,7 +50,7 @@ instance Show (SelectVal a) where
 
 data Node
   = Limit Node Int
-  | SeqScan SelectList RawCondition TableRef (InputStream RawRow)
+  -- | SeqScan SelectList RawCondition TableRef (InputStream RawRow)
   | Sort Node [SortSpec]
   | HashAggregate Node SelectList [ValueExpr] Condition
   | ParallelAggregate Int Node SelectList [ValueExpr] Condition
@@ -149,10 +149,11 @@ updateContext :: TableRef -> RawContext -> Context -> Context
 updateContext tr rc  = rawContexts %~ (M.insert tr rc)
 
 
-
+{-
 plan :: Int -> [(RawContext, InputStream RawRow)] -> QueryExpr -> E Plan
 -- seems like we should be able to generalize this away
 plan _ _ (Select _ sl [] _ _ _ _ _) = return $ Plan $ Eval sl
+-}
 
 -- a select on a single table
 plan _ [(rc, stream)] (Select _ sl [tr] w [] Nothing [] Nothing) = do

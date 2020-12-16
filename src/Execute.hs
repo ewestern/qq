@@ -43,10 +43,10 @@ import Control.Applicative (liftA2)
 import Control.Monad
 import Control.Monad.Trans.State.Lazy
 
-import System.IO.Streams (InputStream, OutputStream, makeOutputStream, peek)
-import System.IO.Streams.Concurrent (inputToChan)
-import qualified System.IO.Streams.Combinators as SC
-import qualified System.IO.Streams.List as SL
+--import System.IO.Streams (InputStream, OutputStream, makeOutputStream, peek)
+-- import System.IO.Streams.Concurrent (inputToChan)
+-- import qualified System.IO.Streams.Combinators as SC
+-- import qualified System.IO.Streams.List as SL
 
 import Plan
 import Sql.Syntax
@@ -149,6 +149,7 @@ headerFromHeaderMap (SelectHeaderMap hm) =
   in V.accum (++) vec ls
 
 
+{-
 execute :: Plan -> E (InputStream Row)
 execute (Plan n) = execute' n
 
@@ -263,6 +264,7 @@ gather selectVals asyncs = do
   -- vec of lists of rows
   rows <- mapM (\async -> HM.toList <$> wait async ) asyncs
   SL.fromList $ fmap (resolveAggRow selectVals) $ concat rows 
+-}
 
 
 resolveAggRow :: [SelectVal (ErrR Prim)] -> (Key, AggRow) -> Row

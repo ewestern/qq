@@ -22,13 +22,10 @@ import Text.Read (readMaybe)
 import qualified Data.ByteString.Char8 as BC
 import Control.Monad.Trans.State.Lazy
 
-import System.IO.Streams (InputStream, OutputStream, makeOutputStream, peek)
-
 import Data.Csv (ToField(..))
 
 import Sql.Syntax
 -- import Coercions
-import qualified System.IO.Streams as S
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import Control.Monad.Except
@@ -54,7 +51,6 @@ instance Hashable Prim
 
 --
 
-type HasHeader = Bool
 
 type E = StateT Context (ExceptT StaticError IO)
 
